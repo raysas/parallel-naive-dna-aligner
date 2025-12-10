@@ -30,7 +30,7 @@ In general we perform 2 main functions when dealing with threads, which will be 
 
 | Function | Description |
 |----------|-------------|
-| `pthread_create(&thread_id, NULL, function_name, (void *)arg)` | creates a new thread that runs a specified function with given arguments |
+| `pthread_create(&thread_id, NULL, function_name, (void *)&arg)` | creates a new thread that runs a specified function with given arguments |
 | `pthread_join(thread_id, NULL)` | waits for a specified thread to finish its execution |
 
 To create a thread, need to have several steps:

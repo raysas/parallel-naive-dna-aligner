@@ -2,24 +2,23 @@
 
 Practice exercise on performing the *naive dna alignment* in parallel using pthreads, openmp, and MPI. This exercise is part of the Advanced Programming course, part II given by prof. LUCAS @ saclay 2025-2026
 
+> disclaimer: this is practice repo that is not corrected or optimized, just for learning purposes and might actually have mistakes as it's a personal take on the exercise
 
-
-## Problem Statement
+## Problem
 
 ### naive dna alignment
 
-**Given:**  
-* long DNA sequence 
-* motif nucleotide sequence
-
-**Return:**
-* position of the motif in the DNA sequence with the highest number of matches
-* number of matches at that position
-
 ![naive dna aln](./assets/naive-dna.png)
 
-Sequentially, this can be solved in O(n*m) time, where n is the length of the DNA sequence and m is the length of the motif, through a simple nested loop
+**Given:**  
+* DNA sequence: e.g., "ACGTACGTGACG"
+* motif sequence: e.g., "ACA"
 
+**Return:** dna subsequence with highest number of matches with motif, through:
+* position of this motif (start index)
+* number of matches of this motif (max value)
+
+Sequentially, this can be solved in O(n*m) time, where n is the length of the DNA sequence and m is the length of the motif, through a simple nested loop.  
 The challenge however is to trasnform yet a simple algorithm into an efficient parallel one in C
 
 ### starters in c
@@ -122,12 +121,99 @@ void* find_local_max(void* _arg){
 
 This part's [c code in `src/naive_dna_posix.c`](./src/naive_dna_posix.c)
 
+### posix threads with mutex
+
+Same strategy as before with a bit of tweaking at the end:
+* [x] split the dna sequence into chunks, one per thread
+* [x] each thread searches for the ~local~ max in its chunk
+* [ ] ~main thread collects local maxes and finds the global max~
+
+In the local max search function `find_local_max`, at the end of the function where it has found its local max, we need to compare it with the global max that is shared accross all threads, and update it if needed.  
+This is a tricky step to perform as we can run into a _race condition*_, as in several threads might be performing the comparison concurrently in an unsafe manner that results in overwriting results.
+
+Mutex locks will be isntalled for the rescue, the trick is to lock the comparison and assignment operations in such a way only one thread performs them (in an atomic fashion) at a time.
+
+mutex lock:
+* add a `pthread_mutex_t*` pointer variable to thread_data struct to pass the mutex to each thread
+* make `max_value` and `max_index` pointers in thread_data making tehm shareable accross all threads
+* define a mutex variable in main using `pthread_mutex_t mutex_max_lock;` and initialize it with `PTHREAD_MUTEX_INITIALIZER`
+* pass mutex variable to each thread through thread_data struct in main's first loop (ptrhead_create loop)
+* add lock and unlock calls around the critical section that compares and assign a max value in `find_local_max` function
+
+
+**`thread_data` struct:**    
+will add `pthread_mutex_t` pointer, will aslo make `shared_max_value_pointer` and `shared_max_index_pointer` instead of having local copies, so that each thread can update the global max directly (maybe better this way?)
+```c
+typedef struct thread_data{
+    unsigned int thread_id;
+    unsigned long* shared_max_value_pointer; // pointer to global max number of matches
+    unsigned int* shared_max_index_pointer;  // pointer to global max index
+    pthread_mutex_t* mutex_max_lock;  // pointer to mutex lock
+    
+    // -- the rest is okay
+    unsigned int start_index;
+    unsigned int end_index;
+    nucleotide_type* dna_sequence;
+    nucleotide_type* motif;
+} thread_data;
+```
+
+
+**`void* find_local_max(void* _arg)` function:**  
+The function here defines a local max variable within the function's scope, then after finding it and exiting the loop, it locks mutex, compares it to the max value pointer saved by the thread_data struxt that is SHARED ACCROSS ALL THREADS, and updates it if needed, then unlocks the mutex => ensuring only one thread at a time can perform this critical section
+```c
+void* find_local_max(void* _arg){
+    thread_data* arg=(thread_data*)_arg;
+
+    unsigned long i;
+    unsigned long j;
+    unsigned long local_max_value=0;
+    unsigned int local_max_index=0;
+
+    for(i=arg->start_index;i<arg->end_index;i++){
+        unsigned long num_matches=0;
+        for(j=0;j<MOTIF_LENGTH;j++){
+            if(arg->dna_sequence[i+j]==arg->motif[j]){
+                num_matches++;
+            }
+        }
+        if (num_matches>local_max_value){
+            local_max_value=num_matches;
+            local_max_index=i;
+        }
+    }
+
+    pthread_mutex_lock(arg->mutex_max_lock);
+    if (local_max_value > *(arg->shared_max_value_pointer)){
+        *(arg->shared_max_value_pointer)=local_max_value;
+        *(arg->shared_max_index_pointer)=local_max_index;
+    }
+    pthread_mutex_unlock(arg->mutex_max_lock);
+
+    pthread_exit(NULL);
+}
+```
+
+**main:**  
+2 loops are needed in main:
+* loop 1: create threads with `pthread_create`, passing each thread its chunk through start and end indices in thread_data struct AS WELL AS the mutex and pointers to global max variables (shared accross all threads)
+* loop 2: join threads with `pthread_join`
+
+This way, no need for a 3rd loop in main to collect local maxes, as the global max is updated directly by each thread safely using mutex locks.
+
+> [!NOTE]
+> running both `naive_dna_posix.c` and `naive_dna_posix_mutex.c` versions in src/ (compiled in `./posix` and `./posix_mutex` respectively) shows that both give the same result: "Global max matches: 322 at index 793254"
+
+### OpenMP
+
+### MPI
+
 
 ## Notes
 
-Code is C for the problem is found in `src/`, other codes and practice exercises are found in `tests/`.  
+Code in C for the problem is found in `src/`, other codes and practice exercises are found in `tests/`.  
 Written notes can be found in `docs/`
 
 ## TODO
 
-- [ ] make it take user input for dna and motif sequences (try it with rosalind datasets)
+- [ ] make it take user input for dna and motif sequences (try it with rosalind datasets: [SUBS problem](https://rosalind.info/problems/subs/))
