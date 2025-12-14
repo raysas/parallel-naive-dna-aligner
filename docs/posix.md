@@ -431,9 +431,3 @@ Where:
 - `real`: total elapsed time from start to finish of the program including all processes and threads
 - `user`: total CPU time spent in user mode, so the time the CPU spent executing the program's own code
 - `sys`: total CPU time spent in kernel mode (system calls, I/O operations)
-
-
-## References
-
-- [POSIX threads youtube tutorial](https://youtube.com/playlist?list=PLfqABt5AS4FmuQf70psXrsMLEDQXNkLq2&si=yo0bdpxgxCfOJm9h)
-- Advanced Programming course chapter I - POSIX threads
