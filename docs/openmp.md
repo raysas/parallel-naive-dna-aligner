@@ -92,6 +92,10 @@ OpenMP is known for its shared memory model, i.e., all threads share the same me
 By default, variables declared outside the parallel region are shared among all threads, while variables declared inside the parallel region are private to each thread 
 One exception is the loop variable in a parallel for loop, which is private by default.
 
+Behaviors:
+- Shared variables: all threads can read and write to the same variable, changes made by one thread are visible to all other threads
+- Private variables: each thread has its own copy of the variable, changes made by one thread do not affect the copies of other threads
+
 *what are automatic variables?*  
 variables declared inside a function (not static or global) are automatic variables, they are stored in the stack and have a lifetime limited to the function scope. Each thread has its own stack, so automatic variables declared inside a parallel region are private to each thread, these are also not shared among threads.
 
